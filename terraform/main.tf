@@ -28,3 +28,9 @@ resource "fabric_lakehouse" "main" {
   display_name = "fabric-iac-${var.environment}-lakehouse"
   description  = "Managed by Terraform"
 }
+
+resource "fabric_workspace" "sandbox" {
+  display_name = "fabric-iac-${var.environment}"
+  description  = "IaC sandbox workspace (${var.environment}) — managed by Terraform"
+  capacity_id  = "8690b09e-2239-448c-b545-fcde775def32"
+}
