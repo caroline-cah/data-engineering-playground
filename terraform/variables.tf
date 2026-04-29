@@ -9,3 +9,8 @@ variable "environment" {
   type        = string
   default     = "dev"
 }
+
+variable "capacity_id" {
+  description = "Microsoft Fabric capacity ID to assign to the workspace"
+  type        = string
+}

@@ -12,7 +12,7 @@ resource "azurerm_resource_group" "fabric_rg" {
 resource "fabric_workspace" "sandbox" {
   display_name = "fabric-iac-${var.environment}"
   description  = "IaC sandbox workspace (${var.environment}) — managed by Terraform"
-  capacity_id  = "8690b09e-2239-448c-b545-fcde775def32"
+  capacity_id  = var.capacity_id
 }
 
 resource "fabric_workspace_role_assignment" "admin" {

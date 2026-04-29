@@ -8,71 +8,64 @@ on:
     branches: [main]
     paths: ["terraform/**"]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
 
 permissions:
   id-token: write
   contents: read
   pull-requests: write
 
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  FABRIC_USE_OIDC: "true"
+  FABRIC_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  FABRIC_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
 jobs:
-  terraform:
-    name: Terraform Plan & Apply
+  plan:
+    name: Plan (dev)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
+      - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
         working-directory: terraform
-        env:
-          ARM_USE_OIDC: true
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          FABRIC_USE_OIDC: "true"
-          FABRIC_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        run: terraform init
-
+        run: terraform init -backend-config="key=environments/dev/terraform.tfstate"
       - name: Terraform Validate
         working-directory: terraform
         run: terraform validate
-
       - name: Terraform Plan
         id: plan
         working-directory: terraform
-        env:
-          ARM_USE_OIDC: true
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          FABRIC_USE_OIDC: "true"
-          FABRIC_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        run: terraform plan -out=tfplan
+        run: terraform plan -var-file="environments/dev.tfvars" -out=tfplan
         continue-on-error: true
-
       - name: Post plan to PR
         uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
         with:
           script: |
-            const output = `#### Terraform Plan 📋
+            const output = `#### Terraform Plan (dev) 📋
             \`\`\`
-            ${{ steps.plan.outputs.stdout }}
+            ${process.env.PLAN_OUTPUT}
             \`\`\`
-            *Plan result: ${{ steps.plan.outcome }}*`;
+            *Plan result: ${process.env.PLAN_OUTCOME}*`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -80,15 +73,54 @@ jobs:
               body: output
             })
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  deploy-dev:
+    name: Deploy (dev)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
         working-directory: terraform
-        env:
-          ARM_USE_OIDC: true
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          FABRIC_USE_OIDC: "true"
-          FABRIC_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: terraform init -backend-config="key=environments/dev/terraform.tfstate"
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -var-file="environments/dev.tfvars" -out=tfplan
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan
+
+  deploy-prod:
+    name: Deploy (prod)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -backend-config="key=environments/prod/terraform.tfstate"
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -var-file="environments/prod.tfvars" -out=tfplan
+      - name: Terraform Apply
+        working-directory: terraform
         run: terraform apply -auto-approve tfplan
