@@ -1,0 +1,15 @@
+{
+  "name": "vessel-eta-ingestion",
+  "objectType": "DataPipeline",
+  "properties": {
+    "activities": [
+      {
+        "name": "WaitForEtaPayload",
+        "type": "Wait",
+        "typeProperties": {
+          "waitTimeInSeconds": 1
+        }
+      }
+    ]
+  }
+}

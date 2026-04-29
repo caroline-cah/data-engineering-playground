@@ -14,3 +14,7 @@ output "fabric_workspace_name" {
 output "lakehouse_id" {
   value = fabric_lakehouse.main.id
 }
+
+output "pipeline_id" {
+  value = fabric_data_pipeline.vessel_eta_ingestion.id
+}

@@ -29,3 +29,18 @@ resource "fabric_lakehouse" "main" {
   display_name = "fabric-iac-${var.environment}-lakehouse"
   description  = "Managed by Terraform"
 }
+
+resource "fabric_data_pipeline" "vessel_eta_ingestion" {
+  workspace_id = fabric_workspace.sandbox.id
+  display_name = "fabric-iac-${var.environment}-vessel-eta-ingestion"
+  description  = "Ingests vessel ETA data from global logistics feeds into the Fabric lakehouse (managed by Terraform)"
+  format       = "Default"
+
+  definition = {
+    "pipeline-content.json" = {
+      source = "pipeline-content.json"
+    }
+  }
+
+  definition_update_enabled = true
+}
